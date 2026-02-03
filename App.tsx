@@ -7,8 +7,8 @@ import { Gauge } from './components/Gauge';
 import * as pdfjsLib from 'pdfjs-dist';
 import { jsPDF } from 'jspdf';
 
-// Using a slightly more robust worker URL for pdf.js in ESM environments
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs`;
+// Using a stable CDN worker for production
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs`;
 
 const LOADING_STEPS = [
   "Initializing Secure Connection...",
@@ -473,12 +473,6 @@ const App: React.FC = () => {
           </div>
         </div>
       </footer>
-      <style>{`
-        @keyframes loading-bar {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
-        }
-      `}</style>
     </div>
   );
 };
