@@ -2,8 +2,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   Search, ShieldCheck, AlertCircle, RefreshCcw, ExternalLink, X, 
-  Upload, FileText, Download, Loader2, ListTree, Lightbulb, 
-  Sparkles, ChevronDown, CheckCircle2, ArrowRight, History,
+  Upload, Download, Loader2, ListTree, Lightbulb, 
+  Sparkles, CheckCircle2, ArrowRight, History,
   FileSearch, Info, BookOpen
 } from 'lucide-react';
 import { analyzeText } from './geminiService';
