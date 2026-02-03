@@ -79,7 +79,7 @@ const App: React.FC = () => {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) extractFile(file);
-    if (e.target) e.target.value = ''; // Allow re-selecting same file
+    if (e.target) e.target.value = ''; 
   };
 
   const extractFile = useCallback(async (file: File) => {
@@ -129,14 +129,12 @@ const App: React.FC = () => {
       }
     };
     
-    // Styled Header
     doc.setFillColor(79, 70, 229);
     doc.rect(0, 0, pageWidth, 40, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(22);
     doc.text("VerifyAI Content Integrity Report", margin, 25);
     
-    // Quick Stats
     doc.setTextColor(51, 65, 85);
     doc.setFontSize(10);
     doc.text(`Originality: ${100 - result.plagiarismPercentage}%`, margin, cursorY);
