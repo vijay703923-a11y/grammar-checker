@@ -12,22 +12,22 @@ export const analyzeText = async (text: string): Promise<AnalysisResult> => {
   const systemPrompt = `
     You are an elite academic integrity engine. 
     Analyze the provided text for:
-    1. Plagiarism: Use Google Search to find matches.
-    2. Grammar & Clarity: Fix errors.
-    3. Writing Style: Identify tone.
-    4. AI Likelihood: Estimate AI generation (0-100).
-    5. Citations: Generate APA style citations for sources.
+    1. Plagiarism: Use Google Search to find matches. If matches are found, provide the URL and the percentage of similarity.
+    2. Grammar & Clarity: Identify errors and provide better alternatives.
+    3. Writing Style: Identify the tone (e.g., Professional, Academic, Casual).
+    4. AI Likelihood: Estimate if the text was AI-generated (0-100).
+    5. Citations: Generate APA style citations for any external sources identified.
 
-    IMPORTANT: 
-    - Output must be valid JSON.
-    - Segments must reconstruct the full input text.
-    - Use grounding metadata for URLs.
+    OUTPUT FORMAT:
+    You must return ONLY a raw JSON object. Do not include markdown formatting like \`\`\`json.
+    Ensure "segments" reconstruct the ENTIRE input text exactly, piece by piece.
+    Set segment type to 'plagiarism' only if a specific web source matches.
   `;
 
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-pro-preview",
-      contents: `Analyze this content for plagiarism and grammar:\n\n${text.substring(0, 15000)}`,
+      contents: `Analyze this content for plagiarism and grammar. Focus on web grounding:\n\n${text.substring(0, 15000)}`,
       config: {
         systemInstruction: systemPrompt,
         tools: [{ googleSearch: {} }],
@@ -77,15 +77,21 @@ export const analyzeText = async (text: string): Promise<AnalysisResult> => {
       },
     });
 
-    const parsed = JSON.parse(response.text || "{}") as AnalysisResult;
+    // Handle potential markdown formatting in response
+    let cleanText = response.text || "{}";
+    if (cleanText.startsWith("```")) {
+      cleanText = cleanText.replace(/^```json/, "").replace(/```$/, "").trim();
+    }
+
+    const parsed = JSON.parse(cleanText) as AnalysisResult;
     
-    // Map Search URLs from grounding metadata
+    // Map Search URLs from grounding metadata for added reliability
     const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
     if (chunks && chunks.length > 0) {
       const urls = chunks.map((c: any) => c.web?.uri).filter(Boolean);
       let urlIdx = 0;
       parsed.segments = parsed.segments.map(seg => {
-        if (seg.type === 'plagiarism' && !seg.sourceUrl && urls[urlIdx]) {
+        if (seg.type === 'plagiarism' && !seg.sourceUrl && urls.length > 0) {
           const u = urls[urlIdx];
           urlIdx = (urlIdx + 1) % urls.length;
           return { ...seg, sourceUrl: u };
@@ -97,6 +103,7 @@ export const analyzeText = async (text: string): Promise<AnalysisResult> => {
     return parsed;
   } catch (error: any) {
     console.error("Gemini Error:", error);
-    throw new Error(error.status === 403 ? "MISSING_API_KEY" : "Analysis engine failed. Please try again.");
+    if (error.message?.includes("API_KEY")) throw new Error("MISSING_API_KEY");
+    throw new Error("Analysis engine failed. Ensure your text is clear and try again.");
   }
 };
