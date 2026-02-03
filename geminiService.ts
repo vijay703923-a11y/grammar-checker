@@ -1,102 +1,102 @@
 
 import { GoogleGenAI } from "@google/genai";
-import { AnalysisResult } from "./types";
+import { AnalysisResult, Type } from "./types";
 
 export const analyzeText = async (text: string): Promise<AnalysisResult> => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey || apiKey === "undefined") {
-    throw new Error("API Key is missing. Please set the API_KEY in your environment variables (e.g., Vercel dashboard).");
+  if (!process.env.API_KEY || process.env.API_KEY === "undefined") {
+    throw new Error("MISSING_API_KEY");
   }
 
-  // Creating a new instance per call ensures we always use the latest API key environment
-  const ai = new GoogleGenAI({ apiKey: apiKey });
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const systemPrompt = `
-    You are an elite academic integrity and document analysis engine.
-    
-    TASK:
-    1. Scan the input text for potential plagiarism using Google Search grounding.
-    2. Identify grammar, syntax, and stylistic improvements.
-    3. Calculate a precise plagiarism percentage (0-100) based on detected overlaps.
-    4. Calculate a grammar/readability score (0-100).
-    5. Segment the text into parts. Each part must be marked as 'original', 'plagiarism', or 'grammar'.
-    6. For 'plagiarism' segments, provide a source description and a 'sourceUrl' if possible.
-    7. For 'grammar' segments, provide at least 2 clear rewrite suggestions.
-    
-    IMPORTANT:
-    The 'segments' array must perfectly reconstruct the original input when joined (including spaces and newlines).
-    
-    OUTPUT FORMAT:
-    Return ONLY a valid JSON object.
-    
-    SCHEMA:
-    {
-      "plagiarismPercentage": number,
-      "grammarScore": number,
-      "overallSummary": "A concise professional summary of the document's integrity.",
-      "subtopics": [{ "title": "Section Title", "segmentIndex": number }],
-      "segments": [{
-        "text": "exact segment text",
-        "type": "original" | "plagiarism" | "grammar",
-        "suggestions": ["suggestion 1", "suggestion 2"],
-        "explanation": "Why was this flagged?",
-        "sourceUrl": "URL if available"
-      }]
-    }
+    You are an elite academic integrity engine. 
+    Analyze the provided text for:
+    1. Plagiarism: Use Google Search to find matches.
+    2. Grammar & Clarity: Fix errors.
+    3. Writing Style: Identify tone.
+    4. AI Likelihood: Estimate AI generation (0-100).
+    5. Citations: Generate APA style citations for sources.
+
+    IMPORTANT: 
+    - Output must be valid JSON.
+    - Segments must reconstruct the full input text.
+    - Use grounding metadata for URLs.
   `;
 
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-pro-preview",
-      contents: [{ parts: [{ text: `Analyze this text for academic integrity and grammar: \n\n${text.substring(0, 15000)}` }] }],
+      contents: `Analyze this content for plagiarism and grammar:\n\n${text.substring(0, 15000)}`,
       config: {
         systemInstruction: systemPrompt,
         tools: [{ googleSearch: {} }],
         temperature: 0.1,
-        responseMimeType: "application/json"
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            plagiarismPercentage: { type: Type.NUMBER },
+            grammarScore: { type: Type.NUMBER },
+            aiLikelihood: { type: Type.NUMBER },
+            writingTone: { type: Type.STRING },
+            overallSummary: { type: Type.STRING },
+            subtopics: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  title: { type: Type.STRING },
+                  segmentIndex: { type: Type.INTEGER }
+                },
+                required: ["title", "segmentIndex"]
+              }
+            },
+            segments: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  text: { type: Type.STRING },
+                  type: { type: Type.STRING },
+                  suggestions: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  explanation: { type: Type.STRING },
+                  sourceUrl: { type: Type.STRING },
+                  citation: { type: Type.STRING }
+                },
+                required: ["text", "type"]
+              }
+            },
+            citations: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            }
+          },
+          required: ["plagiarismPercentage", "grammarScore", "aiLikelihood", "writingTone", "segments", "citations"]
+        }
       },
     });
 
-    const resultText = response.text || "";
-    const parsed = JSON.parse(resultText) as AnalysisResult;
-
-    // Enhanced Grounding URL Extraction
-    // Rule: Extract URLs from groundingChunks and associate them with the analysis
-    const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-    if (groundingChunks && groundingChunks.length > 0) {
-      const detectedUrls = groundingChunks
-        .map((chunk: any) => chunk.web?.uri)
-        .filter(Boolean) as string[];
-      
-      const uniqueUrls = Array.from(new Set(detectedUrls));
-      
-      // If we have plagiarized segments missing URLs, try to map them back
-      let urlCounter = 0;
+    const parsed = JSON.parse(response.text || "{}") as AnalysisResult;
+    
+    // Map Search URLs
+    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+    if (chunks && chunks.length > 0) {
+      const urls = chunks.map((c: any) => c.web?.uri).filter(Boolean);
+      let urlIdx = 0;
       parsed.segments = parsed.segments.map(seg => {
-        if (seg.type === 'plagiarism' && !seg.sourceUrl && uniqueUrls[urlCounter]) {
-          const updated = { ...seg, sourceUrl: uniqueUrls[urlCounter] };
-          urlCounter = (urlCounter + 1) % uniqueUrls.length;
-          return updated;
+        if (seg.type === 'plagiarism' && !seg.sourceUrl && urls[urlIdx]) {
+          const u = urls[urlIdx];
+          urlIdx = (urlIdx + 1) % urls.length;
+          return { ...seg, sourceUrl: u };
         }
         return seg;
       });
-      
-      // Attach the full source list to the summary for transparency
-      if (uniqueUrls.length > 0) {
-        parsed.overallSummary += `\n\nVerified sources identified: ${uniqueUrls.length}`;
-      }
     }
 
     return parsed;
   } catch (error: any) {
-    console.error("Gemini Analysis Failure:", error);
-    if (error.message?.includes("404") || error.message?.includes("not found")) {
-      throw new Error("Analysis engine unavailable. Please verify your subscription or key.");
-    }
-    // Forward the specific SDK error if it's about the API key
-    if (error.message?.includes("API Key")) {
-        throw error;
-    }
-    throw new Error("Failed to process document. Please ensure the text is clear and try again.");
+    console.error("Gemini Error:", error);
+    throw new Error(error.status === 403 ? "MISSING_API_KEY" : "Analysis engine failed. Please try again.");
   }
 };
