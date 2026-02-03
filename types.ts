@@ -1,20 +1,11 @@
 
-export enum Type {
-  STRING = 'STRING',
-  NUMBER = 'NUMBER',
-  INTEGER = 'INTEGER',
-  BOOLEAN = 'BOOLEAN',
-  ARRAY = 'ARRAY',
-  OBJECT = 'OBJECT',
-  NULL = 'NULL',
-}
-
 export interface TextSegment {
   text: string;
   type: 'original' | 'plagiarism' | 'grammar';
   suggestions?: string[];
   sourceUrl?: string;
   explanation?: string;
+  citation?: string;
 }
 
 export interface Subtopic {
@@ -25,9 +16,12 @@ export interface Subtopic {
 export interface AnalysisResult {
   plagiarismPercentage: number;
   grammarScore: number;
-  segments: TextSegment[];
+  aiLikelihood: number;
+  writingTone: string;
   overallSummary: string;
   subtopics: Subtopic[];
+  segments: TextSegment[];
+  citations: string[];
 }
 
 export enum AnalysisStatus {
