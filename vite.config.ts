@@ -5,7 +5,6 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   define: {
-    // This allows the frontend to access process.env.API_KEY during build/dev
     'process.env.API_KEY': JSON.stringify(process.env.API_KEY)
   },
   server: {
@@ -13,6 +12,7 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: false
+    sourcemap: false,
+    chunkSizeWarningLimit: 2000 // Increase limit to suppress the warning for large libraries like PDF.js
   }
 });
