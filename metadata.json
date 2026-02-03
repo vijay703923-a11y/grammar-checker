@@ -1,0 +1,10 @@
+
+{
+  "name": "VerifyAI - Advanced Plagiarism & Grammar Checker",
+  "description": "A professional tool for detecting plagiarism, checking grammar, and providing AI-powered paraphrasing with real-time web grounding.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
