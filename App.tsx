@@ -1,5 +1,5 @@
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Search, ShieldCheck, AlertCircle, RefreshCcw, ExternalLink, X, Upload, FileText, Download, Loader2, ListTree, Lightbulb, Sparkles, ArrowRight } from 'lucide-react';
 import { analyzeText } from './geminiService';
 import { AnalysisResult, AnalysisStatus, TextSegment } from './types';
