@@ -1,4 +1,14 @@
 
+export enum Type {
+  STRING = 'STRING',
+  NUMBER = 'NUMBER',
+  INTEGER = 'INTEGER',
+  BOOLEAN = 'BOOLEAN',
+  ARRAY = 'ARRAY',
+  OBJECT = 'OBJECT',
+  NULL = 'NULL',
+}
+
 export interface TextSegment {
   text: string;
   type: 'original' | 'plagiarism' | 'grammar';
