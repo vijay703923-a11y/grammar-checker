@@ -1,6 +1,5 @@
-
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Search, ShieldCheck, AlertCircle, RefreshCcw, ExternalLink, X, Upload, FileText, Download, Loader2, ListTree, Lightbulb, Sparkles, ArrowRight, ChevronDown, CheckCircle2 } from 'lucide-react';
+import { Search, ShieldCheck, AlertCircle, RefreshCcw, ExternalLink, X, Upload, FileText, Download, Loader2, ListTree, Lightbulb, Sparkles, ChevronDown, CheckCircle2 } from 'lucide-react';
 import { analyzeText } from './geminiService';
 import { AnalysisResult, AnalysisStatus, TextSegment } from './types';
 import { Gauge } from './components/Gauge';
