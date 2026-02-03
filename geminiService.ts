@@ -79,7 +79,7 @@ export const analyzeText = async (text: string): Promise<AnalysisResult> => {
 
     const parsed = JSON.parse(response.text || "{}") as AnalysisResult;
     
-    // Map Search URLs
+    // Map Search URLs from grounding metadata
     const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
     if (chunks && chunks.length > 0) {
       const urls = chunks.map((c: any) => c.web?.uri).filter(Boolean);
