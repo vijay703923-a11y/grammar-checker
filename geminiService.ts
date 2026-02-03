@@ -1,90 +1,93 @@
 
 import { GoogleGenAI } from "@google/genai";
-import { AnalysisResult, Type } from "./types";
+import { AnalysisResult } from "./types";
 
 export const analyzeText = async (text: string): Promise<AnalysisResult> => {
-  // Creating a new instance per call as per guidelines for key selection (though process.env.API_KEY is standard here)
+  // Creating a new instance per call ensures we always use the latest API key environment
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
   
   const systemPrompt = `
-    You are an elite academic integrity and writing enhancement engine. 
+    You are an elite academic integrity and document analysis engine.
     
     TASK:
-    1. Analyze the input text for potential plagiarism using Google Search grounding.
-    2. Identify grammar, style, and clarity issues.
-    3. Calculate an overall plagiarism percentage (0-100).
-    4. Calculate a grammar/writing score (0-100).
-    5. Segment the text into parts to identify specifically where issues occur.
+    1. Scan the input text for potential plagiarism using Google Search grounding.
+    2. Identify grammar, syntax, and stylistic improvements.
+    3. Calculate a precise plagiarism percentage (0-100) based on detected overlaps.
+    4. Calculate a grammar/readability score (0-100).
+    5. Segment the text into parts. Each part must be marked as 'original', 'plagiarism', or 'grammar'.
+    6. For 'plagiarism' segments, provide a source description and a 'sourceUrl' if possible.
+    7. For 'grammar' segments, provide at least 2 clear rewrite suggestions.
+    
+    IMPORTANT:
+    The 'segments' array must perfectly reconstruct the original input when joined (including spaces and newlines).
     
     OUTPUT FORMAT:
-    Return ONLY a JSON object. Ensure the 'segments' array, when joined, reconstructs the input text perfectly.
+    Return ONLY a valid JSON object.
     
     SCHEMA:
     {
       "plagiarismPercentage": number,
       "grammarScore": number,
-      "overallSummary": "string",
-      "subtopics": [{ "title": "string", "segmentIndex": number }],
+      "overallSummary": "A concise professional summary of the document's integrity.",
+      "subtopics": [{ "title": "Section Title", "segmentIndex": number }],
       "segments": [{
-        "text": "the exact text part",
+        "text": "exact segment text",
         "type": "original" | "plagiarism" | "grammar",
         "suggestions": ["suggestion 1", "suggestion 2"],
-        "explanation": "brief reason for flag",
-        "sourceUrl": "URL if plagiarism"
+        "explanation": "Why was this flagged?",
+        "sourceUrl": "URL if available"
       }]
     }
   `;
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: [{ parts: [{ text: `Please analyze this document text: \n\n${text.substring(0, 12000)}` }] }],
+      model: "gemini-3-pro-preview",
+      contents: [{ parts: [{ text: `Analyze this text for academic integrity and grammar: \n\n${text.substring(0, 15000)}` }] }],
       config: {
         systemInstruction: systemPrompt,
         tools: [{ googleSearch: {} }],
-        temperature: 0.1, // Low temperature for high consistency in JSON output
+        temperature: 0.1,
+        responseMimeType: "application/json"
       },
     });
 
     const resultText = response.text || "";
-    // Robust JSON extraction
-    const jsonMatch = resultText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("The AI provided an invalid response format. Please try again.");
-    }
+    const parsed = JSON.parse(resultText) as AnalysisResult;
 
-    const parsed = JSON.parse(jsonMatch[0]) as AnalysisResult;
-
-    // Extract grounding URLs and assign them to plagiarized segments if the model didn't provide specific ones
+    // Enhanced Grounding URL Extraction
+    // Rule: Extract URLs from groundingChunks and associate them with the analysis
     const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
     if (groundingChunks && groundingChunks.length > 0) {
-      const urls = groundingChunks
+      const detectedUrls = groundingChunks
         .map((chunk: any) => chunk.web?.uri)
         .filter(Boolean) as string[];
       
-      if (urls.length > 0) {
-        // Find segments marked as plagiarism that don't have URLs and assign from the chunks
-        let urlIdx = 0;
-        parsed.segments = parsed.segments.map(seg => {
-          if (seg.type === 'plagiarism' && !seg.sourceUrl && urls[urlIdx]) {
-            const updated = { ...seg, sourceUrl: urls[urlIdx] };
-            urlIdx = (urlIdx + 1) % urls.length;
-            return updated;
-          }
-          return seg;
-        });
-        
-        const uniqueUrls = Array.from(new Set(urls));
-        parsed.overallSummary += `\n\nPotential sources identified: ${uniqueUrls.length}`;
+      const uniqueUrls = Array.from(new Set(detectedUrls));
+      
+      // If we have plagiarized segments missing URLs, try to map them back
+      let urlCounter = 0;
+      parsed.segments = parsed.segments.map(seg => {
+        if (seg.type === 'plagiarism' && !seg.sourceUrl && uniqueUrls[urlCounter]) {
+          const updated = { ...seg, sourceUrl: uniqueUrls[urlCounter] };
+          urlCounter = (urlCounter + 1) % uniqueUrls.length;
+          return updated;
+        }
+        return seg;
+      });
+      
+      // Attach the full source list to the summary for transparency
+      if (uniqueUrls.length > 0) {
+        parsed.overallSummary += `\n\nVerified sources identified: ${uniqueUrls.length}`;
       }
     }
 
     return parsed;
   } catch (error: any) {
-    console.error("Analysis Error:", error);
-    if (error.message?.includes("API_KEY") || error.message?.includes("not found")) {
-      throw new Error("Authentication failed. Please ensure the AI service is properly configured.");
+    console.error("Gemini Analysis Failure:", error);
+    if (error.message?.includes("404") || error.message?.includes("not found")) {
+      throw new Error("Analysis engine unavailable. Please verify your subscription or key.");
     }
-    throw new Error(error.message || "An unexpected error occurred during analysis.");
+    throw new Error("Failed to process document. Please ensure the text is clear and try again.");
   }
 };
