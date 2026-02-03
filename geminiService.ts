@@ -3,8 +3,13 @@ import { GoogleGenAI } from "@google/genai";
 import { AnalysisResult } from "./types";
 
 export const analyzeText = async (text: string): Promise<AnalysisResult> => {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey || apiKey === "undefined") {
+    throw new Error("API Key is missing. Please set the API_KEY in your environment variables (e.g., Vercel dashboard).");
+  }
+
   // Creating a new instance per call ensures we always use the latest API key environment
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+  const ai = new GoogleGenAI({ apiKey: apiKey });
   
   const systemPrompt = `
     You are an elite academic integrity and document analysis engine.
@@ -87,6 +92,10 @@ export const analyzeText = async (text: string): Promise<AnalysisResult> => {
     console.error("Gemini Analysis Failure:", error);
     if (error.message?.includes("404") || error.message?.includes("not found")) {
       throw new Error("Analysis engine unavailable. Please verify your subscription or key.");
+    }
+    // Forward the specific SDK error if it's about the API key
+    if (error.message?.includes("API Key")) {
+        throw error;
     }
     throw new Error("Failed to process document. Please ensure the text is clear and try again.");
   }
