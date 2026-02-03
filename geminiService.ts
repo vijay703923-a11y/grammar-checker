@@ -1,15 +1,16 @@
 
-import { GoogleGenAI } from "@google/genai";
-import { AnalysisResult, Type } from "./types";
+import { GoogleGenAI, Type } from "@google/genai";
+import { AnalysisResult } from "./types.ts";
 
 export const analyzeText = async (text: string): Promise<AnalysisResult> => {
-  if (!process.env.API_KEY || process.env.API_KEY === "undefined") {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey || apiKey === "undefined") {
     throw new Error("MISSING_API_KEY");
   }
 
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey });
   
-  const systemPrompt = `
+  const systemInstruction = `
     You are an elite academic integrity engine. 
     Analyze the provided text for:
     1. Plagiarism: Use Google Search to find matches. If matches are found, provide the URL and the percentage of similarity.
@@ -29,7 +30,7 @@ export const analyzeText = async (text: string): Promise<AnalysisResult> => {
       model: "gemini-3-pro-preview",
       contents: `Analyze this content for plagiarism and grammar. Focus on web grounding:\n\n${text.substring(0, 15000)}`,
       config: {
-        systemInstruction: systemPrompt,
+        systemInstruction,
         tools: [{ googleSearch: {} }],
         temperature: 0.1,
         responseMimeType: "application/json",
@@ -77,15 +78,15 @@ export const analyzeText = async (text: string): Promise<AnalysisResult> => {
       },
     });
 
-    // Handle potential markdown formatting in response
-    let cleanText = response.text || "{}";
-    if (cleanText.startsWith("```")) {
-      cleanText = cleanText.replace(/^```json/, "").replace(/```$/, "").trim();
+    let resultText = response.text || "{}";
+    // Stripping potential markdown artifacts if model deviates from system instruction
+    if (resultText.includes("```")) {
+      resultText = resultText.replace(/```json|```/g, "").trim();
     }
 
-    const parsed = JSON.parse(cleanText) as AnalysisResult;
+    const parsed = JSON.parse(resultText) as AnalysisResult;
     
-    // Map Search URLs from grounding metadata for added reliability
+    // Supplement grounding metadata for source URL mapping if segments are missing them
     const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
     if (chunks && chunks.length > 0) {
       const urls = chunks.map((c: any) => c.web?.uri).filter(Boolean);
@@ -104,6 +105,6 @@ export const analyzeText = async (text: string): Promise<AnalysisResult> => {
   } catch (error: any) {
     console.error("Gemini Error:", error);
     if (error.message?.includes("API_KEY")) throw new Error("MISSING_API_KEY");
-    throw new Error("Analysis engine failed. Ensure your text is clear and try again.");
+    throw new Error(error.message || "Analysis engine failed. Please try again.");
   }
 };
