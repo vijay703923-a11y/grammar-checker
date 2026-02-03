@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from 'react';
 import { Search, ShieldCheck, AlertCircle, RefreshCcw, ExternalLink, X, Upload, FileText, Download, Loader2, ListTree, Lightbulb, Sparkles, ArrowRight } from 'lucide-react';
 import { analyzeText } from './geminiService';
@@ -7,8 +6,8 @@ import { Gauge } from './components/Gauge';
 import * as pdfjsLib from 'pdfjs-dist';
 import { jsPDF } from 'jspdf';
 
-// Using a stable CDN worker for production
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs`;
+// Using a worker version that exactly matches the API version to prevent the mismatch error
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs`;
 
 const LOADING_STEPS = [
   "Initializing Secure Connection...",
@@ -138,7 +137,7 @@ const App: React.FC = () => {
         throw new Error("Invalid file type. Please upload PDF or TXT.");
       }
     } catch (err: any) {
-      setError(err.message || "Error reading file.");
+      setError(err.message || "Error reading file. Ensure it is a valid PDF or TXT.");
     } finally {
       setIsExtracting(false);
     }
@@ -291,9 +290,20 @@ const App: React.FC = () => {
                   />
                   
                   {error && (
-                    <div className="mt-8 p-5 bg-red-50 border border-red-100 rounded-[1.5rem] flex items-center gap-4 text-red-700 animate-in shake duration-500">
-                      <AlertCircle className="w-6 h-6 shrink-0" />
-                      <p className="text-sm font-black uppercase tracking-tight">{error}</p>
+                    <div className="mt-8 p-6 bg-red-50/80 backdrop-blur-sm border border-red-200 rounded-[2rem] flex items-center gap-5 text-red-800 animate-in shake duration-500 shadow-xl shadow-red-500/5">
+                      <div className="bg-red-500 p-2.5 rounded-full text-white shrink-0">
+                        <AlertCircle className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-widest leading-none mb-1">System Alert</p>
+                        <p className="text-sm font-bold opacity-90">{error}</p>
+                      </div>
+                      <button 
+                        onClick={() => setError(null)}
+                        className="ml-auto p-2 hover:bg-red-100 rounded-full transition-colors"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
                     </div>
                   )}
 
@@ -302,10 +312,10 @@ const App: React.FC = () => {
                       onClick={handleAnalyze}
                       disabled={status === AnalysisStatus.ANALYZING || !inputText.trim()}
                       className={`
-                        px-16 py-5 rounded-2xl font-black text-xs uppercase tracking-[0.2em] flex items-center gap-4 transition-all
+                        w-full md:w-auto px-20 py-5 rounded-2xl font-black text-sm uppercase tracking-[0.2em] flex items-center justify-center gap-4 transition-all shadow-xl
                         ${status === AnalysisStatus.ANALYZING 
                           ? 'bg-slate-100 text-slate-400 cursor-not-allowed' 
-                          : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-2xl hover:shadow-indigo-500/40 hover:-translate-y-1 active:translate-y-0'}
+                          : 'bg-[#5046e5] text-white hover:bg-[#4338ca] hover:shadow-2xl hover:shadow-indigo-500/40 hover:-translate-y-1 active:translate-y-0'}
                       `}
                     >
                       {status === AnalysisStatus.ANALYZING ? (
