@@ -78,16 +78,13 @@ export const analyzeText = async (text: string): Promise<AnalysisResult> => {
       },
     });
 
-    let resultText = response.text || "{}";
-    // Stripping potential markdown artifacts if model deviates from system instruction
-    if (resultText.includes("```")) {
-      resultText = resultText.replace(/```json|```/g, "").trim();
-    }
-
+    const resultText = response.text || "{}";
     const parsed = JSON.parse(resultText) as AnalysisResult;
     
-    // Supplement grounding metadata for source URL mapping if segments are missing them
-    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+    // Supplement grounding metadata for source URL mapping
+    const groundingMetadata = response.candidates?.[0]?.groundingMetadata;
+    const chunks = groundingMetadata?.groundingChunks;
+    
     if (chunks && chunks.length > 0) {
       const urls = chunks.map((c: any) => c.web?.uri).filter(Boolean);
       let urlIdx = 0;
