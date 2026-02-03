@@ -1,74 +1,90 @@
+
 import { GoogleGenAI } from "@google/genai";
-import { AnalysisResult } from "./types";
+import { AnalysisResult, Type } from "./types";
 
 export const analyzeText = async (text: string): Promise<AnalysisResult> => {
-  const apiKey = process.env.API_KEY;
-  
-  if (!apiKey || apiKey.trim() === "") {
-    throw new Error("AI Service Configuration Missing: Please set the API_KEY environment variable in your deployment dashboard.");
-  }
-
-  // Flash model is significantly faster than Pro for analysis tasks
-  const ai = new GoogleGenAI({ apiKey });
+  // Creating a new instance per call as per guidelines for key selection (though process.env.API_KEY is standard here)
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
   
   const systemPrompt = `
-    You are a high-speed academic integrity engine. 
-    Task: Analyze the text for plagiarism (using Google Search), grammar, and quality.
+    You are an elite academic integrity and writing enhancement engine. 
     
-    Output Requirements:
-    - MUST return ONLY a JSON object.
-    - 'segments' must reconstruct the original text exactly.
-    - Provide 2-3 high-quality rewrite suggestions for flagged parts.
+    TASK:
+    1. Analyze the input text for potential plagiarism using Google Search grounding.
+    2. Identify grammar, style, and clarity issues.
+    3. Calculate an overall plagiarism percentage (0-100).
+    4. Calculate a grammar/writing score (0-100).
+    5. Segment the text into parts to identify specifically where issues occur.
     
-    JSON Schema:
+    OUTPUT FORMAT:
+    Return ONLY a JSON object. Ensure the 'segments' array, when joined, reconstructs the input text perfectly.
+    
+    SCHEMA:
     {
       "plagiarismPercentage": number,
       "grammarScore": number,
       "overallSummary": "string",
       "subtopics": [{ "title": "string", "segmentIndex": number }],
       "segments": [{
-        "text": "original text",
+        "text": "the exact text part",
         "type": "original" | "plagiarism" | "grammar",
-        "suggestions": ["string"],
-        "sourceUrl": "URL",
-        "explanation": "why flagged"
+        "suggestions": ["suggestion 1", "suggestion 2"],
+        "explanation": "brief reason for flag",
+        "sourceUrl": "URL if plagiarism"
       }]
     }
   `;
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview", // Changed from pro to flash for speed
-      contents: `Analyze: "${text.substring(0, 10000)}"`, // Limit input slightly for faster context processing
+      model: "gemini-3-flash-preview",
+      contents: [{ parts: [{ text: `Please analyze this document text: \n\n${text.substring(0, 12000)}` }] }],
       config: {
         systemInstruction: systemPrompt,
         tools: [{ googleSearch: {} }],
-        temperature: 0.2, // Lower temperature for faster, more consistent JSON
+        temperature: 0.1, // Low temperature for high consistency in JSON output
       },
     });
 
     const resultText = response.text || "";
+    // Robust JSON extraction
     const jsonMatch = resultText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("Format Error: The AI response was interrupted.");
+    if (!jsonMatch) {
+      throw new Error("The AI provided an invalid response format. Please try again.");
+    }
 
     const parsed = JSON.parse(jsonMatch[0]) as AnalysisResult;
 
-    // Fast URL extraction
+    // Extract grounding URLs and assign them to plagiarized segments if the model didn't provide specific ones
     const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-    if (groundingChunks) {
+    if (groundingChunks && groundingChunks.length > 0) {
       const urls = groundingChunks
         .map((chunk: any) => chunk.web?.uri)
-        .filter(Boolean);
+        .filter(Boolean) as string[];
       
       if (urls.length > 0) {
-        const uniqueUrls = Array.from(new Set(urls)) as string[];
-        parsed.overallSummary += "\n\nVerified Sources:\n" + uniqueUrls.map(u => `- ${u}`).join("\n");
+        // Find segments marked as plagiarism that don't have URLs and assign from the chunks
+        let urlIdx = 0;
+        parsed.segments = parsed.segments.map(seg => {
+          if (seg.type === 'plagiarism' && !seg.sourceUrl && urls[urlIdx]) {
+            const updated = { ...seg, sourceUrl: urls[urlIdx] };
+            urlIdx = (urlIdx + 1) % urls.length;
+            return updated;
+          }
+          return seg;
+        });
+        
+        const uniqueUrls = Array.from(new Set(urls));
+        parsed.overallSummary += `\n\nPotential sources identified: ${uniqueUrls.length}`;
       }
     }
 
     return parsed;
   } catch (error: any) {
     console.error("Analysis Error:", error);
-    throw error;
+    if (error.message?.includes("API_KEY") || error.message?.includes("not found")) {
+      throw new Error("Authentication failed. Please ensure the AI service is properly configured.");
+    }
+    throw new Error(error.message || "An unexpected error occurred during analysis.");
   }
 };
